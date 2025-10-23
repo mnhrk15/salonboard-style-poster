@@ -117,6 +117,54 @@ def read_task(
     }
 
 
+@router.get("/{task_id}/items", response_model=dict)
+def read_task_items(
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    task_id: UUID,
+) -> dict:
+    """Get all items for a specific task.
+
+    Args:
+        db: Database session.
+        current_user: Current authenticated user.
+        task_id: UUID of task to get items for.
+
+    Returns:
+        List of task items.
+
+    Raises:
+        HTTPException: If task not found or unauthorized.
+    """
+    # Verify task exists and belongs to user
+    task = task_service.get_task_by_id(db, task_id, current_user.id)
+    if not task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Task not found",
+        )
+
+    # Get task items
+    items = task_service.get_task_items(db, task_id)
+
+    return {
+        "success": True,
+        "data": [
+            {
+                "id": item.id,
+                "task_id": str(item.task_id),
+                "item_index": item.item_index,
+                "status": item.status,
+                "style_name": item.style_name,
+                "error_message": item.error_message,
+                "screenshot_path": item.screenshot_path,
+                "processed_at": item.processed_at.isoformat() if item.processed_at else None,
+            }
+            for item in items
+        ],
+    }
+
+
 @router.post("/{task_id}/interrupt", response_model=dict)
 def interrupt_task(
     db: Annotated[Session, Depends(get_db)],

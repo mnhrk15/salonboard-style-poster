@@ -1,0 +1,200 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+        <h2>ダッシュボード</h2>
+        <a href="/tasks/new" class="btn btn-primary">新規スタイル投稿</a>
+    </div>
+
+    <div id="tasks-container">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>タスクID</th>
+                    <th>ステータス</th>
+                    <th>進捗</th>
+                    <th>作成日時</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody id="tasks-tbody">
+                <!-- Tasks will be loaded here via JavaScript -->
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script src="/static/js/websocket.js"></script>
+<script>
+requireAuth();
+
+// Store current tasks data
+let currentTasks = new Map();
+
+// Load tasks from API
+async function loadTasks() {
+    try {
+        const tasks = await API.tasks.list();
+        renderTasks(tasks);
+        initializeWebSockets();
+    } catch (error) {
+        showFlash('タスクの読み込みに失敗しました: ' + error.message, 'error');
+    }
+}
+
+// Render tasks table
+function renderTasks(tasks) {
+    const tbody = document.getElementById('tasks-tbody');
+
+    if (tasks.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center" style="padding: var(--spacing-xl); color: var(--text-secondary);">タスクがありません。「新規スタイル投稿」から作成してください。</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = tasks.map(task => {
+        const percentage = task.total_items > 0 ? Math.round((task.completed_items / task.total_items) * 100) : 0;
+
+        let actionButton = '';
+        if (task.status === 'PROCESSING') {
+            actionButton = `<button onclick="interruptTask('${task.id}')" class="btn btn-danger btn-sm">中断</button>`;
+        } else if (task.status === 'INTERRUPTED') {
+            actionButton = `<button onclick="resumeTask('${task.id}')" class="btn btn-primary btn-sm">再開</button>`;
+        } else if (task.status === 'FAILURE') {
+            actionButton = `<button onclick="downloadLogs('${task.id}')" class="btn btn-secondary btn-sm">ログ</button>`;
+        }
+
+        return `
+            <tr data-task-id="${task.id}">
+                <td><a href="/tasks/${task.id}" style="color: var(--primary-color); text-decoration: none;">${task.id}</a></td>
+                <td class="task-status"><span class="badge badge-${task.status.toLowerCase()}">${task.status}</span></td>
+                <td class="task-progress">
+                    <div class="progress-text">${task.completed_items} / ${task.total_items}</div>
+                    ${task.total_items > 0 ? `
+                    <div class="progress mt-1">
+                        <div class="progress-bar" style="width: ${percentage}%">
+                            ${percentage}%
+                        </div>
+                    </div>
+                    ` : ''}
+                </td>
+                <td>${formatDate(task.created_at)}</td>
+                <td class="task-actions">${actionButton}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+// Initialize WebSocket connections for PROCESSING tasks
+function initializeWebSockets() {
+    const rows = document.querySelectorAll('#tasks-tbody tr[data-task-id]');
+    rows.forEach(row => {
+        const taskId = row.getAttribute('data-task-id');
+        const statusBadge = row.querySelector('.task-status .badge');
+        const statusText = statusBadge.textContent.trim();
+
+        // Subscribe to WebSocket updates for PROCESSING tasks
+        if (statusText === 'PROCESSING') {
+            wsManager.subscribe(taskId, handleTaskUpdate);
+        }
+    });
+}
+
+// Handle task update from WebSocket
+function handleTaskUpdate(data) {
+    const taskId = data.task_id;
+    const row = document.querySelector(`tr[data-task-id="${taskId}"]`);
+    if (!row) return;
+
+    // Update status badge
+    const statusCell = row.querySelector('.task-status');
+    if (statusCell && data.status) {
+        const statusMap = {
+            'PENDING': { class: 'badge-pending', text: 'PENDING' },
+            'PROCESSING': { class: 'badge-processing', text: 'PROCESSING' },
+            'SUCCESS': { class: 'badge-success', text: 'SUCCESS' },
+            'FAILURE': { class: 'badge-failure', text: 'FAILURE' },
+            'INTERRUPTED': { class: 'badge-interrupted', text: 'INTERRUPTED' }
+        };
+
+        const badge = statusMap[data.status] || { class: 'badge-pending', text: data.status };
+        statusCell.innerHTML = `<span class="badge ${badge.class}">${badge.text}</span>`;
+    }
+
+    // Update progress
+    const progressCell = row.querySelector('.task-progress');
+    if (progressCell && data.completed_items !== undefined && data.total_items !== undefined) {
+        const percentage = data.progress_percentage || 0;
+
+        progressCell.innerHTML = `
+            <div class="progress-text">${data.completed_items} / ${data.total_items}</div>
+            <div class="progress mt-1">
+                <div class="progress-bar" style="width: ${percentage}%">
+                    ${Math.round(percentage)}%
+                </div>
+            </div>
+        `;
+    }
+
+    // Update action buttons
+    const actionsCell = row.querySelector('.task-actions');
+    if (actionsCell && data.status) {
+        let html = '';
+        if (data.status === 'PROCESSING') {
+            html = `<button onclick="interruptTask('${taskId}')" class="btn btn-danger btn-sm">中断</button>`;
+        } else if (data.status === 'INTERRUPTED') {
+            html = `<button onclick="resumeTask('${taskId}')" class="btn btn-primary btn-sm">再開</button>`;
+        } else if (data.status === 'FAILURE') {
+            html = `<button onclick="downloadLogs('${taskId}')" class="btn btn-secondary btn-sm">ログ</button>`;
+        }
+        actionsCell.innerHTML = html;
+
+        // Unsubscribe from WebSocket if task is no longer PROCESSING
+        if (data.status !== 'PROCESSING') {
+            wsManager.unsubscribe(taskId);
+
+            // Show completion notification
+            if (data.status === 'SUCCESS') {
+                showFlash(`タスク ${taskId} が完了しました`, 'success', 10000);
+            } else if (data.status === 'FAILURE') {
+                showFlash(`タスク ${taskId} がエラーで終了しました`, 'error', 10000);
+            }
+        }
+    }
+}
+
+async function interruptTask(taskId) {
+    if (!confirm('タスクを中断しますか？')) return;
+    try {
+        await API.tasks.interrupt(taskId);
+        showFlash('タスクを中断しました', 'success');
+        // Don't reload - WebSocket will update the UI
+    } catch (error) {
+        showFlash(error.message, 'error');
+    }
+}
+
+async function resumeTask(taskId) {
+    try {
+        await API.tasks.resume(taskId);
+        showFlash('タスクを再開しました', 'success');
+        // Subscribe to WebSocket for real-time updates
+        wsManager.subscribe(taskId, handleTaskUpdate);
+    } catch (error) {
+        showFlash(error.message, 'error');
+    }
+}
+
+function downloadLogs(taskId) {
+    API.tasks.downloadLogs(taskId);
+}
+
+// Load tasks on page load
+loadTasks();
+
+// Clean up WebSocket connections when leaving the page
+window.addEventListener('beforeunload', () => {
+    wsManager.unsubscribeAll();
+});
+</script>
+{% endblock %}

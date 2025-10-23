@@ -1,0 +1,351 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+            <h2>タスク詳細</h2>
+            <p style="color: var(--text-secondary); margin-top: var(--spacing-xs);">タスクID: <span id="task-id"></span></p>
+        </div>
+        <a href="/dashboard" class="btn btn-secondary">戻る</a>
+    </div>
+
+    <div style="padding: var(--spacing-md);">
+        <!-- Status and Progress -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--spacing-md); margin-bottom: var(--spacing-lg);">
+            <div class="card" style="padding: var(--spacing-md);">
+                <h4 style="color: var(--text-secondary); margin-bottom: var(--spacing-sm); font-size: 0.875rem;">ステータス</h4>
+                <div id="task-status">
+                    <span class="badge badge-pending">読み込み中...</span>
+                </div>
+            </div>
+
+            <div class="card" style="padding: var(--spacing-md);">
+                <h4 style="color: var(--text-secondary); margin-bottom: var(--spacing-sm); font-size: 0.875rem;">進捗</h4>
+                <div id="task-progress">
+                    <div style="font-weight: 600; margin-bottom: var(--spacing-xs);">
+                        <span id="completed-items">0</span> / <span id="total-items">0</span>
+                    </div>
+                    <div class="progress">
+                        <div id="progress-bar" class="progress-bar" style="width: 0%">
+                            0%
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card" style="padding: var(--spacing-md);">
+                <h4 style="color: var(--text-secondary); margin-bottom: var(--spacing-sm); font-size: 0.875rem;">作成日時</h4>
+                <div id="created-at" style="font-weight: 600;">-</div>
+            </div>
+
+            <div class="card" style="padding: var(--spacing-md);">
+                <h4 style="color: var(--text-secondary); margin-bottom: var(--spacing-sm); font-size: 0.875rem;">実行時間</h4>
+                <div id="execution-time" style="font-weight: 600;">-</div>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div id="task-actions" style="display: flex; gap: var(--spacing-md); margin-bottom: var(--spacing-lg);">
+            <button onclick="downloadScreenshot()" class="btn btn-secondary">スクリーンショットをダウンロード</button>
+        </div>
+
+        <!-- Task Items -->
+        <div class="card" style="margin-bottom: var(--spacing-lg);">
+            <div class="card-header">
+                <h3>投稿アイテム</h3>
+            </div>
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>順番</th>
+                        <th>スタイル名</th>
+                        <th>ステータス</th>
+                    </tr>
+                </thead>
+                <tbody id="task-items-tbody">
+                    <tr>
+                        <td colspan="3" class="text-center" style="padding: var(--spacing-xl); color: var(--text-secondary);">読み込み中...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- SALON BOARD Setting Info -->
+        <div class="card">
+            <div class="card-header">
+                <h3>SALON BOARD 設定情報</h3>
+            </div>
+            <div id="sb-setting-info" style="padding: var(--spacing-md);">
+                <div class="text-center" style="padding: var(--spacing-xl); color: var(--text-secondary);">読み込み中...</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="/static/js/websocket.js"></script>
+<script>
+requireAuth();
+
+// Get task ID from URL
+const urlParts = window.location.pathname.split('/');
+const taskId = urlParts[urlParts.length - 1];
+
+let currentTask = null;
+let currentSetting = null;
+
+// Load task details from API
+async function loadTaskDetail() {
+    try {
+        // Load task
+        const taskResponse = await API.tasks.get(taskId);
+        currentTask = taskResponse.data;
+
+        // Update task info
+        document.getElementById('task-id').textContent = currentTask.id;
+        updateTaskStatus(currentTask.status);
+        updateTaskProgress(currentTask.completed_items, currentTask.total_items, currentTask.progress_percentage);
+
+        // Update created_at
+        document.getElementById('created-at').textContent = formatDate(currentTask.created_at);
+
+        // Update execution time
+        updateExecutionTime(currentTask);
+
+        // Update action buttons
+        updateActionButtons(currentTask.status);
+
+        // Load task items
+        await loadTaskItems();
+
+        // Load SALON BOARD setting
+        await loadSetting(currentTask.sb_setting_id);
+
+        // Initialize WebSocket for real-time updates if task is PROCESSING
+        if (currentTask.status === 'PROCESSING') {
+            wsManager.subscribe(taskId, handleTaskUpdate);
+        }
+    } catch (error) {
+        showFlash('タスクの読み込みに失敗しました: ' + error.message, 'error');
+    }
+}
+
+// Load task items
+async function loadTaskItems() {
+    try {
+        const response = await API.tasks.getItems(taskId);
+        const items = response.data;
+
+        renderTaskItems(items);
+    } catch (error) {
+        document.getElementById('task-items-tbody').innerHTML =
+            '<tr><td colspan="3" class="text-center" style="padding: var(--spacing-xl); color: var(--error-color);">アイテムの読み込みに失敗しました</td></tr>';
+        console.error('Failed to load task items:', error);
+    }
+}
+
+// Render task items table
+function renderTaskItems(items) {
+    const tbody = document.getElementById('task-items-tbody');
+
+    if (items.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" class="text-center" style="padding: var(--spacing-xl); color: var(--text-secondary);">アイテムがありません。</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = items.map(item => {
+        let statusBadge = '';
+        switch (item.status) {
+            case 'SUCCESS':
+                statusBadge = '<span class="badge badge-success">完了</span>';
+                break;
+            case 'FAILURE':
+                statusBadge = '<span class="badge badge-failure">エラー</span>';
+                break;
+            case 'PROCESSING':
+                statusBadge = '<span class="badge badge-processing">処理中</span>';
+                break;
+            default:
+                statusBadge = '<span class="badge badge-pending">待機中</span>';
+        }
+
+        return `
+            <tr data-item-index="${item.item_index}">
+                <td>${item.item_index + 1}</td>
+                <td>${item.style_name || '-'}</td>
+                <td>${statusBadge}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+// Load SALON BOARD setting
+async function loadSetting(settingId) {
+    try {
+        const response = await API.settings.get(settingId);
+        currentSetting = response.data;
+
+        renderSetting(currentSetting);
+    } catch (error) {
+        document.getElementById('sb-setting-info').innerHTML =
+            '<div class="text-center" style="padding: var(--spacing-xl); color: var(--error-color);">設定の読み込みに失敗しました</div>';
+        console.error('Failed to load setting:', error);
+    }
+}
+
+// Render SALON BOARD setting info
+function renderSetting(setting) {
+    const container = document.getElementById('sb-setting-info');
+    container.innerHTML = `
+        <div style="display: grid; grid-template-columns: 150px 1fr; gap: var(--spacing-sm); margin-bottom: var(--spacing-sm);">
+            <div style="color: var(--text-secondary);">設定名:</div>
+            <div style="font-weight: 600;">${setting.name}</div>
+        </div>
+        <div style="display: grid; grid-template-columns: 150px 1fr; gap: var(--spacing-sm); margin-bottom: var(--spacing-sm);">
+            <div style="color: var(--text-secondary);">ベースURL:</div>
+            <div>${setting.base_url}</div>
+        </div>
+        <div style="display: grid; grid-template-columns: 150px 1fr; gap: var(--spacing-sm);">
+            <div style="color: var(--text-secondary);">ログインID:</div>
+            <div>${setting.login_id}</div>
+        </div>
+    `;
+}
+
+// Update task status badge
+function updateTaskStatus(status) {
+    const statusMap = {
+        'PENDING': { class: 'badge-pending', text: 'PENDING' },
+        'PROCESSING': { class: 'badge-processing', text: 'PROCESSING' },
+        'SUCCESS': { class: 'badge-success', text: 'SUCCESS' },
+        'FAILURE': { class: 'badge-failure', text: 'FAILURE' },
+        'INTERRUPTED': { class: 'badge-interrupted', text: 'INTERRUPTED' }
+    };
+
+    const badge = statusMap[status] || { class: 'badge-pending', text: status };
+    document.getElementById('task-status').innerHTML = `<span class="badge ${badge.class}">${badge.text}</span>`;
+}
+
+// Update task progress
+function updateTaskProgress(completed, total, percentage) {
+    document.getElementById('completed-items').textContent = completed;
+    document.getElementById('total-items').textContent = total;
+
+    const progressBar = document.getElementById('progress-bar');
+    const percentValue = percentage || 0;
+    progressBar.style.width = `${percentValue}%`;
+    progressBar.textContent = `${Math.round(percentValue)}%`;
+}
+
+// Update execution time
+function updateExecutionTime(task) {
+    const container = document.getElementById('execution-time');
+
+    if (!task.started_at) {
+        container.textContent = '未開始';
+        return;
+    }
+
+    if (task.completed_at) {
+        const startedAt = new Date(task.started_at);
+        const completedAt = new Date(task.completed_at);
+        const diffMs = completedAt - startedAt;
+        const diffMin = Math.round(diffMs / 60000 * 10) / 10;
+        container.textContent = `${diffMin}分`;
+    } else {
+        container.textContent = '実行中...';
+    }
+}
+
+// Update action buttons based on status
+function updateActionButtons(status) {
+    const actionsDiv = document.getElementById('task-actions');
+    let html = '';
+
+    if (status === 'PROCESSING') {
+        html += '<button onclick="interruptTask()" class="btn btn-danger">タスクを中断</button>';
+    } else if (status === 'INTERRUPTED') {
+        html += '<button onclick="resumeTask()" class="btn btn-primary">タスクを再開</button>';
+    }
+
+    if (status === 'FAILURE') {
+        html += '<button onclick="downloadLogs()" class="btn btn-secondary">エラーログをダウンロード</button>';
+    }
+
+    html += '<button onclick="downloadScreenshot()" class="btn btn-secondary">スクリーンショットをダウンロード</button>';
+
+    actionsDiv.innerHTML = html;
+}
+
+// Handle task update from WebSocket
+function handleTaskUpdate(data) {
+    // Update status
+    if (data.status) {
+        updateTaskStatus(data.status);
+        updateActionButtons(data.status);
+
+        // Unsubscribe if task is no longer PROCESSING
+        if (data.status !== 'PROCESSING') {
+            wsManager.unsubscribe(taskId);
+
+            if (data.status === 'SUCCESS') {
+                showFlash('タスクが完了しました', 'success', 10000);
+            } else if (data.status === 'FAILURE') {
+                showFlash('タスクがエラーで終了しました', 'error', 10000);
+            }
+        }
+    }
+
+    // Update progress
+    if (data.completed_items !== undefined && data.total_items !== undefined) {
+        updateTaskProgress(data.completed_items, data.total_items, data.progress_percentage);
+    }
+
+    // Update execution time
+    if (currentTask) {
+        updateExecutionTime({
+            ...currentTask,
+            started_at: data.started_at || currentTask.started_at,
+            completed_at: data.completed_at || currentTask.completed_at
+        });
+    }
+}
+
+async function interruptTask() {
+    if (!confirm('タスクを中断しますか？')) return;
+    try {
+        await API.tasks.interrupt(taskId);
+        showFlash('タスクを中断しました', 'success');
+    } catch (error) {
+        showFlash(error.message, 'error');
+    }
+}
+
+async function resumeTask() {
+    try {
+        await API.tasks.resume(taskId);
+        showFlash('タスクを再開しました', 'success');
+        // Subscribe to WebSocket for updates
+        wsManager.subscribe(taskId, handleTaskUpdate);
+    } catch (error) {
+        showFlash(error.message, 'error');
+    }
+}
+
+function downloadLogs() {
+    API.tasks.downloadLogs(taskId);
+}
+
+function downloadScreenshot() {
+    API.tasks.downloadScreenshot(taskId);
+}
+
+// Load task detail on page load
+loadTaskDetail();
+
+// Clean up on page unload
+window.addEventListener('beforeunload', () => {
+    wsManager.unsubscribeAll();
+});
+</script>
+{% endblock %}

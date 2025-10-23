@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>サインイン - SALON BOARD 自動投稿</title>
+    <link rel="stylesheet" href="/static/css/main.css">
+    <style>
+        .login-container {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .login-card {
+            background-color: white;
+            border-radius: var(--border-radius);
+            box-shadow: var(--box-shadow-lg);
+            padding: var(--spacing-xl);
+            width: 100%;
+            max-width: 400px;
+            margin: var(--spacing-md);
+        }
+
+        .login-header {
+            text-align: center;
+            margin-bottom: var(--spacing-xl);
+        }
+
+        .login-header h1 {
+            color: var(--primary-color);
+            font-size: 1.5rem;
+            margin-bottom: var(--spacing-sm);
+        }
+
+        .login-header p {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-card">
+            <div class="login-header">
+                <h1>SALON BOARD 自動投稿</h1>
+                <p>配布されたアカウントでサインインしてください</p>
+            </div>
+
+            <div id="flash-messages"></div>
+
+            <form id="login-form" onsubmit="handleLogin(event)">
+                <div class="form-group">
+                    <label for="email" class="form-label required">メールアドレス</label>
+                    <input
+                        type="email"
+                        id="email"
+                        name="email"
+                        class="form-input"
+                        required
+                        autofocus
+                        placeholder="user@example.com"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="password" class="form-label required">パスワード</label>
+                    <input
+                        type="password"
+                        id="password"
+                        name="password"
+                        class="form-input"
+                        required
+                        placeholder="パスワードを入力"
+                    >
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-lg" style="width: 100%;">
+                    サインイン
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/utils.js"></script>
+    <script>
+        // Redirect if already logged in
+        if (localStorage.getItem('access_token')) {
+            window.location.href = '/dashboard';
+        }
+
+        async function handleLogin(event) {
+            event.preventDefault();
+
+            const form = event.target;
+            const button = form.querySelector('button[type="submit"]');
+            const email = form.email.value;
+            const password = form.password.value;
+
+            setButtonLoading(button, true);
+
+            try {
+                const data = await API.auth.login(email, password);
+                showFlash('サインインに成功しました', 'success');
+
+                // Redirect to dashboard
+                setTimeout(() => {
+                    window.location.href = '/dashboard';
+                }, 500);
+
+            } catch (error) {
+                showFlash(error.message || 'サインインに失敗しました', 'error');
+                setButtonLoading(button, false);
+            }
+        }
+    </script>
+</body>
+</html>

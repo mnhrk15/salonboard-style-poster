@@ -1,0 +1,236 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+        <h2>ユーザー管理</h2>
+        <button onclick="showCreateForm()" class="btn btn-primary">新規ユーザー</button>
+    </div>
+
+    <div id="users-list">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>メールアドレス</th>
+                    <th>権限</th>
+                    <th>ステータス</th>
+                    <th>作成日時</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody id="users-tbody">
+                <!-- Users will be loaded here via JavaScript -->
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Modal for Create/Edit -->
+<div id="user-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+    <div class="card" style="width: 90%; max-width: 500px; margin: var(--spacing-md);">
+        <div class="card-header">
+            <h3 id="modal-title">新規ユーザー</h3>
+        </div>
+        <form id="user-form" onsubmit="handleSubmit(event)">
+            <input type="hidden" id="user_id" name="user_id">
+
+            <div class="form-group">
+                <label for="email" class="form-label required">メールアドレス</label>
+                <input type="email" id="email" name="email" class="form-input" required placeholder="user@example.com">
+            </div>
+
+            <div class="form-group">
+                <label for="password" class="form-label required">パスワード</label>
+                <input type="password" id="password" name="password" class="form-input" required placeholder="パスワードを入力" minlength="8">
+                <small class="form-text">最低8文字以上で設定してください</small>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">権限</label>
+                <div style="display: flex; gap: var(--spacing-md);">
+                    <label style="display: flex; align-items: center; gap: var(--spacing-xs);">
+                        <input type="checkbox" id="is_admin" name="is_admin">
+                        <span>管理者権限を付与</span>
+                    </label>
+                </div>
+                <small class="form-text">管理者はユーザー管理と全タスクの閲覧が可能です</small>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">ステータス</label>
+                <div style="display: flex; gap: var(--spacing-md);">
+                    <label style="display: flex; align-items: center; gap: var(--spacing-xs);">
+                        <input type="checkbox" id="is_active" name="is_active" checked>
+                        <span>アカウントを有効化</span>
+                    </label>
+                </div>
+                <small class="form-text">無効化されたユーザーはサインインできません</small>
+            </div>
+
+            <div class="form-actions" style="display: flex; gap: var(--spacing-md); justify-content: flex-end;">
+                <button type="button" onclick="closeModal()" class="btn btn-secondary">キャンセル</button>
+                <button type="submit" class="btn btn-primary">保存</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+requireAuth();
+
+let currentUsers = [];
+
+async function loadUsers() {
+    try {
+        currentUsers = await API.users.list();
+        renderUsersTable();
+    } catch (error) {
+        showFlash('ユーザーの読み込みに失敗しました: ' + error.message, 'error');
+    }
+}
+
+function renderUsersTable() {
+    const tbody = document.getElementById('users-tbody');
+    if (!tbody) return;
+
+    if (currentUsers.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center" style="padding: var(--spacing-xl); color: var(--text-secondary);">ユーザーがありません。「新規ユーザー」から作成してください。</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = currentUsers.map(user => `
+        <tr>
+            <td>${user.email}</td>
+            <td>
+                ${user.is_admin
+                    ? '<span class="badge badge-processing">管理者</span>'
+                    : '<span class="badge badge-pending">一般ユーザー</span>'}
+            </td>
+            <td>
+                ${user.is_active
+                    ? '<span class="badge badge-success">有効</span>'
+                    : '<span class="badge badge-failure">無効</span>'}
+            </td>
+            <td>${formatDate(user.created_at)}</td>
+            <td>
+                <button onclick="editUser('${user.id}')" class="btn btn-secondary btn-sm">編集</button>
+                <button onclick="deleteUser('${user.id}')" class="btn btn-danger btn-sm">削除</button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function showCreateForm() {
+    document.getElementById('modal-title').textContent = '新規ユーザー';
+    document.getElementById('user-form').reset();
+    document.getElementById('user_id').value = '';
+    document.getElementById('is_active').checked = true;
+    document.getElementById('password').required = true;
+    document.getElementById('password').placeholder = 'パスワードを入力';
+    document.getElementById('user-modal').style.display = 'flex';
+}
+
+async function editUser(userId) {
+    try {
+        const user = currentUsers.find(u => u.id === userId);
+        if (!user) {
+            showFlash('ユーザーが見つかりません', 'error');
+            return;
+        }
+
+        document.getElementById('modal-title').textContent = 'ユーザー編集';
+        document.getElementById('user_id').value = user.id;
+        document.getElementById('email').value = user.email;
+        document.getElementById('password').value = '';
+        document.getElementById('password').required = false;
+        document.getElementById('password').placeholder = '変更する場合のみ入力';
+        document.getElementById('is_admin').checked = user.is_admin;
+        document.getElementById('is_active').checked = user.is_active;
+        document.getElementById('user-modal').style.display = 'flex';
+    } catch (error) {
+        showFlash('ユーザーの読み込みに失敗しました: ' + error.message, 'error');
+    }
+}
+
+async function deleteUser(userId) {
+    if (!confirm('このユーザーを削除しますか？\n※ユーザーに紐づくタスクやデータも削除される可能性があります。')) return;
+
+    try {
+        await API.users.delete(userId);
+        showFlash('ユーザーを削除しました', 'success');
+        await loadUsers();
+    } catch (error) {
+        showFlash('削除に失敗しました: ' + error.message, 'error');
+    }
+}
+
+function closeModal() {
+    document.getElementById('user-modal').style.display = 'none';
+    document.getElementById('user-form').reset();
+}
+
+async function handleSubmit(event) {
+    event.preventDefault();
+
+    const form = event.target;
+    const button = form.querySelector('button[type="submit"]');
+    const userId = form.user_id.value;
+
+    // Validate email
+    if (!isValidEmail(form.email.value)) {
+        showFlash('有効なメールアドレスを入力してください', 'error');
+        return;
+    }
+
+    const data = {
+        email: form.email.value,
+        is_admin: form.is_admin.checked,
+        is_active: form.is_active.checked
+    };
+
+    // Add password if provided
+    if (form.password.value) {
+        if (form.password.value.length < 8) {
+            showFlash('パスワードは最低8文字以上で設定してください', 'error');
+            return;
+        }
+        data.password = form.password.value;
+    }
+
+    setButtonLoading(button, true);
+
+    try {
+        if (userId) {
+            // Update
+            await API.users.update(userId, data);
+            showFlash('ユーザーを更新しました', 'success');
+        } else {
+            // Create
+            if (!data.password) {
+                showFlash('パスワードを入力してください', 'error');
+                setButtonLoading(button, false);
+                return;
+            }
+            await API.users.create(data);
+            showFlash('ユーザーを作成しました', 'success');
+        }
+
+        closeModal();
+        await loadUsers();
+    } catch (error) {
+        showFlash('保存に失敗しました: ' + error.message, 'error');
+        setButtonLoading(button, false);
+    }
+}
+
+// Close modal when clicking outside
+document.getElementById('user-modal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'user-modal') {
+        closeModal();
+    }
+});
+
+// Load users on page load
+loadUsers();
+</script>
+{% endblock %}

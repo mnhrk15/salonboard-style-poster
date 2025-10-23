@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h2>新規スタイル投稿</h2>
+    </div>
+
+    <form id="task-form" onsubmit="handleSubmit(event)" enctype="multipart/form-data">
+        <div class="form-group">
+            <label for="sb_setting_id" class="form-label required">SALON BOARD 設定</label>
+            <select id="sb_setting_id" name="sb_setting_id" class="form-input" required>
+                <option value="">選択してください</option>
+            </select>
+            <small class="form-text">使用するSALON BOARDアカウント設定を選択してください</small>
+        </div>
+
+        <div class="form-group">
+            <label for="data_file" class="form-label required">データファイル (CSV/Excel)</label>
+            <input
+                type="file"
+                id="data_file"
+                name="data_file"
+                class="form-input"
+                accept=".csv,.xlsx,.xls"
+                required
+                onchange="handleDataFileChange(event)"
+            >
+            <small class="form-text">
+                投稿データを含むCSVまたはExcelファイルをアップロードしてください<br>
+                必須カラム: style_name, stylist_name, category_main, category_sub, image_filename
+            </small>
+            <div id="data-file-info" style="margin-top: var(--spacing-sm);"></div>
+        </div>
+
+        <div class="form-group">
+            <label for="images" class="form-label required">画像ファイル</label>
+            <input
+                type="file"
+                id="images"
+                name="images"
+                class="form-input"
+                accept="image/jpeg,image/jpg,image/png"
+                multiple
+                required
+                onchange="handleImagesChange(event)"
+            >
+            <small class="form-text">
+                JPEGまたはPNG形式の画像ファイルを選択してください（複数選択可）<br>
+                ファイル名はデータファイルのimage_filenameカラムと一致させてください
+            </small>
+            <div id="images-info" style="margin-top: var(--spacing-sm);"></div>
+        </div>
+
+        <div class="form-actions" style="display: flex; gap: var(--spacing-md); justify-content: flex-end;">
+            <a href="/dashboard" class="btn btn-secondary">キャンセル</a>
+            <button type="submit" class="btn btn-primary">タスク作成</button>
+        </div>
+    </form>
+</div>
+
+<script>
+requireAuth();
+
+let selectedSettings = [];
+let selectedDataFile = null;
+let selectedImages = [];
+
+// Load SALON BOARD settings on page load
+async function loadSettings() {
+    try {
+        const settings = await API.settings.list();
+        const select = document.getElementById('sb_setting_id');
+
+        selectedSettings = settings;
+
+        // Clear existing options except the first one
+        select.innerHTML = '<option value="">選択してください</option>';
+
+        settings.forEach(setting => {
+            const option = document.createElement('option');
+            option.value = setting.id;
+            option.textContent = `${setting.name} (${setting.login_id})`;
+            select.appendChild(option);
+        });
+
+        if (settings.length === 0) {
+            showFlash('SALON BOARD設定が登録されていません。先に設定を登録してください。', 'warning');
+        }
+    } catch (error) {
+        showFlash('設定の読み込みに失敗しました: ' + error.message, 'error');
+    }
+}
+
+function handleDataFileChange(event) {
+    const file = event.target.files[0];
+    selectedDataFile = file;
+
+    if (file) {
+        const info = document.getElementById('data-file-info');
+        info.innerHTML = `
+            <div class="alert alert-info">
+                <strong>選択されたファイル:</strong> ${file.name} (${formatFileSize(file.size)})
+            </div>
+        `;
+    }
+}
+
+function handleImagesChange(event) {
+    const files = Array.from(event.target.files);
+    selectedImages = files;
+
+    if (files.length > 0) {
+        const info = document.getElementById('images-info');
+        const fileList = files.map(f => `<li>${f.name} (${formatFileSize(f.size)})</li>`).join('');
+        info.innerHTML = `
+            <div class="alert alert-info">
+                <strong>選択された画像:</strong> ${files.length}件
+                <ul style="margin-top: var(--spacing-sm); margin-left: var(--spacing-md);">
+                    ${fileList}
+                </ul>
+            </div>
+        `;
+    }
+}
+
+async function handleSubmit(event) {
+    event.preventDefault();
+
+    const form = event.target;
+    const button = form.querySelector('button[type="submit"]');
+
+    // Get form values
+    const sbSettingId = form.sb_setting_id.value;
+    const dataFile = selectedDataFile;
+    const images = selectedImages;
+
+    // Validation
+    if (!sbSettingId) {
+        showFlash('SALON BOARD設定を選択してください', 'error');
+        return;
+    }
+
+    if (!dataFile) {
+        showFlash('データファイルを選択してください', 'error');
+        return;
+    }
+
+    if (images.length === 0) {
+        showFlash('画像ファイルを選択してください', 'error');
+        return;
+    }
+
+    // Confirm
+    if (!confirm(`${images.length}件の画像を含むタスクを作成します。よろしいですか？`)) {
+        return;
+    }
+
+    setButtonLoading(button, true);
+
+    try {
+        const task = await API.tasks.create(sbSettingId, dataFile, images);
+        showFlash(`タスク #${task.id} を作成しました`, 'success');
+
+        // Redirect to dashboard after 1 second
+        setTimeout(() => {
+            window.location.href = '/dashboard';
+        }, 1000);
+
+    } catch (error) {
+        showFlash('タスクの作成に失敗しました: ' + error.message, 'error');
+        setButtonLoading(button, false);
+    }
+}
+
+// Load settings when page loads
+loadSettings();
+</script>
+{% endblock %}

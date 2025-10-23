@@ -1,15 +1,18 @@
 """FastAPI main application."""
 
 import asyncio
+from pathlib import Path
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import Depends, FastAPI, WebSocket, WebSocketDisconnect, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user_from_token
-from app.api.v1 import api_router
+from app.api.v1 import api_router, pages_router
 from app.core.config import settings
 from app.core.database import get_db
 from app.models.user import User
@@ -32,8 +35,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Mount static files
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
+
+# Configure templates
+templates = Jinja2Templates(directory="app/templates")
+
 # Include API router
 app.include_router(api_router, prefix="/api/v1")
+
+# Include page router (HTML pages)
+app.include_router(pages_router)
 
 
 @app.get("/health")
@@ -50,19 +62,6 @@ def health_check() -> dict:
     }
 
 
-@app.get("/")
-def root() -> dict:
-    """Root endpoint.
-
-    Returns:
-        Dictionary with API information.
-    """
-    return {
-        "app": settings.APP_NAME,
-        "version": settings.APP_VERSION,
-        "docs": "/docs",
-        "health": "/health",
-    }
 
 
 @app.websocket("/ws/tasks/{task_id}")

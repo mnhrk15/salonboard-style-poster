@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}{{ title }}{% endblock %} - SALON BOARD 自動投稿</title>
+
+    <!-- CSS -->
+    <link rel="stylesheet" href="/static/css/main.css">
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- Header (authenticated users only) -->
+    <header class="header" id="main-header" style="display: none;">
+        <div class="container">
+            <div class="header-content">
+                <h1 class="header-logo">
+                    <a href="/dashboard">SALON BOARD 自動投稿</a>
+                </h1>
+                <nav class="header-nav">
+                    <span class="user-name" id="user-email"></span>
+                    <a href="/admin/users" class="nav-link" id="admin-link" style="display: none;">ユーザー管理</a>
+                    <a href="/settings" class="nav-link">設定</a>
+                    <button onclick="logout()" class="btn btn-secondary btn-sm">サインアウト</button>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="container">
+            <!-- Flash messages -->
+            <div id="flash-messages"></div>
+
+            {% block content %}{% endblock %}
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2025 SALON BOARD 自動投稿. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <!-- JavaScript -->
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/auth.js"></script>
+    <script src="/static/js/utils.js"></script>
+    <script>
+    // Load user info and show header if authenticated
+    async function loadUserInfo() {
+        if (!isAuthenticated()) {
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/v1/users/me', {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+                }
+            });
+
+            if (response.ok) {
+                const user = await response.json();
+                document.getElementById('user-email').textContent = user.email;
+
+                if (user.is_admin) {
+                    document.getElementById('admin-link').style.display = 'inline';
+                }
+
+                document.getElementById('main-header').style.display = 'block';
+            } else if (response.status === 401) {
+                // Token expired, redirect to login
+                localStorage.removeItem('access_token');
+                if (window.location.pathname !== '/') {
+                    window.location.href = '/';
+                }
+            }
+        } catch (error) {
+            console.error('Failed to load user info:', error);
+        }
+    }
+
+    // Load user info on page load
+    if (window.location.pathname !== '/') {
+        loadUserInfo();
+    }
+    </script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>
