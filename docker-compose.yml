@@ -1,0 +1,108 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:16
+    container_name: salonboard_db
+    environment:
+      POSTGRES_DB: ${DB_NAME:-salonboard_db}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - salonboard_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for Celery broker and backend
+  redis:
+    image: redis:7-alpine
+    container_name: salonboard_redis
+    ports:
+      - "6379:6379"
+    networks:
+      - salonboard_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # FastAPI Web Application
+  web:
+    build: .
+    container_name: salonboard_web
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - ./app:/app/app
+      - ./alembic:/app/alembic
+      - ./alembic.ini:/app/alembic.ini
+      - uploads:/app/uploads
+      - logs:/app/logs
+      - screenshots:/app/screenshots
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - salonboard_network
+    restart: unless-stopped
+
+  # Celery Worker for background tasks
+  worker:
+    build: .
+    container_name: salonboard_worker
+    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=2
+    volumes:
+      - ./app:/app/app
+      - uploads:/app/uploads
+      - logs:/app/logs
+      - screenshots:/app/screenshots
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - salonboard_network
+    restart: unless-stopped
+
+  # Nginx reverse proxy
+  nginx:
+    image: nginx:alpine
+    container_name: salonboard_nginx
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/ssl:/etc/nginx/ssl:ro
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - web
+    networks:
+      - salonboard_network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  uploads:
+  logs:
+  screenshots:
+
+networks:
+  salonboard_network:
+    driver: bridge
