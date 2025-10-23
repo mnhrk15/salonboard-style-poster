@@ -91,3 +91,10 @@ Temporary Items
 
 # Docker
 docker-compose.override.yml
+
+# SSL Certificates (should not be tracked)
+docker/nginx/ssl/
+*.pem
+*.key
+*.crt
+*.csr
