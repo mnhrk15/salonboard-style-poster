@@ -65,13 +65,12 @@
 </div>
 
 <script>
-requireAuth();
-
 let currentSettings = [];
 
 async function loadSettings() {
     try {
-        currentSettings = await API.settings.list();
+        const response = await API.settings.list();
+        currentSettings = response.data.settings;
         renderSettingsTable();
     } catch (error) {
         showFlash('設定の読み込みに失敗しました: ' + error.message, 'error');
@@ -89,9 +88,9 @@ function renderSettingsTable() {
 
     tbody.innerHTML = currentSettings.map(setting => `
         <tr>
-            <td>${setting.name}</td>
-            <td>${setting.login_id}</td>
-            <td>${setting.base_url}</td>
+            <td>${setting.setting_name}</td>
+            <td>${setting.sb_user_id}</td>
+            <td>${setting.salon_id}</td>
             <td>${formatDate(setting.created_at)}</td>
             <td>
                 <button onclick="editSetting('${setting.id}')" class="btn btn-secondary btn-sm">編集</button>
@@ -110,12 +109,13 @@ function showCreateForm() {
 
 async function editSetting(settingId) {
     try {
-        const setting = await API.settings.get(settingId);
+        const response = await API.settings.get(settingId);
+        const setting = response.data;
         document.getElementById('modal-title').textContent = '設定編集';
         document.getElementById('setting_id').value = setting.id;
-        document.getElementById('name').value = setting.name;
-        document.getElementById('base_url').value = setting.base_url;
-        document.getElementById('login_id').value = setting.login_id;
+        document.getElementById('name').value = setting.setting_name;
+        document.getElementById('base_url').value = setting.salon_id;
+        document.getElementById('login_id').value = setting.sb_user_id;
         document.getElementById('login_password').value = '';
         document.getElementById('login_password').placeholder = '変更する場合のみ入力';
         document.getElementById('login_password').required = false;
@@ -150,10 +150,11 @@ async function handleSubmit(event) {
     const settingId = form.setting_id.value;
 
     const data = {
-        name: form.name.value,
-        base_url: form.base_url.value,
-        login_id: form.login_id.value,
-        login_password: form.login_password.value
+        setting_name: form.name.value,
+        sb_user_id: form.login_id.value,
+        sb_password: form.login_password.value,
+        salon_id: form.base_url.value,
+        salon_name: form.name.value
     };
 
     setButtonLoading(button, true);
@@ -187,7 +188,10 @@ document.getElementById('setting-modal')?.addEventListener('click', (e) => {
     }
 });
 
-// Load settings on page load
-loadSettings();
+// Initialize page when DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+    requireAuth();
+    loadSettings();
+});
 </script>
 {% endblock %}

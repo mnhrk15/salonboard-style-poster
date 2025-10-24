@@ -80,7 +80,7 @@ const API = {
     tasks: {
         async list(skip = 0, limit = 50) {
             const response = await fetch(
-                `${API_BASE_URL}/tasks?skip=${skip}&limit=${limit}`,
+                `${API_BASE_URL}/tasks/?skip=${skip}&limit=${limit}`,
                 {
                     headers: getAuthHeaders()
                 }
@@ -153,7 +153,7 @@ const API = {
     // SALON BOARD Settings
     settings: {
         async list() {
-            const response = await fetch(`${API_BASE_URL}/sb-settings`, {
+            const response = await fetch(`${API_BASE_URL}/sb-settings/`, {
                 headers: getAuthHeaders()
             });
             return handleResponse(response);
@@ -167,7 +167,7 @@ const API = {
         },
 
         async create(data) {
-            const response = await fetch(`${API_BASE_URL}/sb-settings`, {
+            const response = await fetch(`${API_BASE_URL}/sb-settings/`, {
                 method: 'POST',
                 headers: getAuthHeaders(),
                 body: JSON.stringify(data)
@@ -197,7 +197,7 @@ const API = {
     users: {
         async list(skip = 0, limit = 100) {
             const response = await fetch(
-                `${API_BASE_URL}/users?skip=${skip}&limit=${limit}`,
+                `${API_BASE_URL}/users/?skip=${skip}&limit=${limit}`,
                 {
                     headers: getAuthHeaders()
                 }
@@ -206,7 +206,7 @@ const API = {
         },
 
         async create(data) {
-            const response = await fetch(`${API_BASE_URL}/users`, {
+            const response = await fetch(`${API_BASE_URL}/users/`, {
                 method: 'POST',
                 headers: getAuthHeaders(),
                 body: JSON.stringify(data)

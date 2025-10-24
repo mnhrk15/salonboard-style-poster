@@ -27,15 +27,14 @@
 
 <script src="/static/js/websocket.js"></script>
 <script>
-requireAuth();
-
 // Store current tasks data
 let currentTasks = new Map();
 
 // Load tasks from API
 async function loadTasks() {
     try {
-        const tasks = await API.tasks.list();
+        const response = await API.tasks.list();
+        const tasks = response.data.tasks;
         renderTasks(tasks);
         initializeWebSockets();
     } catch (error) {
@@ -189,8 +188,11 @@ function downloadLogs(taskId) {
     API.tasks.downloadLogs(taskId);
 }
 
-// Load tasks on page load
-loadTasks();
+// Initialize page when DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+    requireAuth();
+    loadTasks();
+});
 
 // Clean up WebSocket connections when leaving the page
 window.addEventListener('beforeunload', () => {

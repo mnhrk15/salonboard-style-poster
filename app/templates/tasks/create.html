@@ -60,8 +60,6 @@
 </div>
 
 <script>
-requireAuth();
-
 let selectedSettings = [];
 let selectedDataFile = null;
 let selectedImages = [];
@@ -69,7 +67,8 @@ let selectedImages = [];
 // Load SALON BOARD settings on page load
 async function loadSettings() {
     try {
-        const settings = await API.settings.list();
+        const response = await API.settings.list();
+        const settings = response.data.settings;
         const select = document.getElementById('sb_setting_id');
 
         selectedSettings = settings;
@@ -80,7 +79,7 @@ async function loadSettings() {
         settings.forEach(setting => {
             const option = document.createElement('option');
             option.value = setting.id;
-            option.textContent = `${setting.name} (${setting.login_id})`;
+            option.textContent = `${setting.setting_name} (${setting.sb_user_id})`;
             select.appendChild(option);
         });
 
@@ -173,7 +172,10 @@ async function handleSubmit(event) {
     }
 }
 
-// Load settings when page loads
-loadSettings();
+// Initialize page when DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+    requireAuth();
+    loadSettings();
+});
 </script>
 {% endblock %}
