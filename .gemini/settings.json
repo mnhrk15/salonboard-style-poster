@@ -17,6 +17,16 @@
       "context7": {
         "command": "npx",
         "args": ["-y", "@upstash/context7-mcp@latest"]
+      },
+      "playwright": {
+        "command": "npx",
+        "args": [
+          "@playwright/mcp@latest"
+        ]
+      },
+      "chrome-devtools": {
+        "command": "npx",
+        "args": ["chrome-devtools-mcp@latest"]
       }
     }
   }
