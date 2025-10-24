@@ -55,27 +55,37 @@ class SalonBoardStylePoster:
 
     def _start_browser(self) -> None:
         """Start Playwright browser with anti-detection measures."""
+        logger.info("Starting browser initialization...")
         self.playwright = sync_playwright().start()
+        logger.info("Playwright started successfully")
 
         # Launch Firefox with anti-detection settings
+        logger.info(f"Launching Firefox (headless={self.headless}, slow_mo={self.slow_mo})...")
         self.browser = self.playwright.firefox.launch(
             headless=self.headless,
             slow_mo=self.slow_mo,
+            args=[
+                "--disable-dev-shm-usage",
+                "--no-sandbox",
+            ],
         )
+        logger.info("Firefox launched successfully")
 
         # Create context with anti-detection measures
+        logger.info("Creating browser context...")
         context = self.browser.new_context(
             user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/115.0",
             viewport={"width": 1920, "height": 1080},
         )
+        logger.info("Browser context created")
 
         # Hide webdriver property
         context.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
 
+        logger.info("Creating new page...")
         self.page = context.new_page()
         self.page.set_default_timeout(settings.PLAYWRIGHT_TIMEOUT)
-
-        logger.info("Browser started successfully")
+        logger.info(f"Browser started successfully (timeout={settings.PLAYWRIGHT_TIMEOUT}ms)")
 
     def _close_browser(self) -> None:
         """Close browser and clean up resources."""
@@ -199,20 +209,27 @@ class SalonBoardStylePoster:
 
         # Navigate to login page
         login_url = self.selectors["login"]["url"]
+        logger.info(f"Navigating to login page: {login_url}")
         self.page.goto(login_url)
+        logger.info("Login page loaded")
 
         if self._check_robot_detection():
             raise RuntimeError("Robot detection on login page")
 
         # Fill login form
+        logger.info("Filling login form...")
         user_id_input = self.selectors["login"]["user_id_input"]
         password_input = self.selectors["login"]["password_input"]["primary"]
         login_button = self.selectors["login"]["login_button"]["primary"]
 
         self.page.locator(user_id_input).fill(user_id)
+        logger.info(f"Filled user_id: {user_id}")
         self.page.locator(password_input).fill(password)
+        logger.info("Filled password")
 
+        logger.info("Clicking login button...")
         self._click_and_wait(login_button)
+        logger.info("Login button clicked")
 
         # Check if salon selection is needed (multi-store account)
         salon_list_table = self.selectors["salon_selection"]["salon_list_table"]

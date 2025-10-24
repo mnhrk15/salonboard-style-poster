@@ -28,7 +28,6 @@
             >
             <small class="form-text">
                 投稿データを含むCSVまたはExcelファイルをアップロードしてください<br>
-                必須カラム: style_name, stylist_name, category_main, category_sub, image_filename
             </small>
             <div id="data-file-info" style="margin-top: var(--spacing-sm);"></div>
         </div>
@@ -47,7 +46,6 @@
             >
             <small class="form-text">
                 JPEGまたはPNG形式の画像ファイルを選択してください（複数選択可）<br>
-                ファイル名はデータファイルのimage_filenameカラムと一致させてください
             </small>
             <div id="images-info" style="margin-top: var(--spacing-sm);"></div>
         </div>
@@ -158,8 +156,9 @@ async function handleSubmit(event) {
     setButtonLoading(button, true);
 
     try {
-        const task = await API.tasks.create(sbSettingId, dataFile, images);
-        showFlash(`タスク #${task.id} を作成しました`, 'success');
+        const response = await API.tasks.create(sbSettingId, dataFile, images);
+        const taskId = response.data.task_id;
+        showFlash(`タスク #${taskId} を作成しました`, 'success');
 
         // Redirect to dashboard after 1 second
         setTimeout(() => {

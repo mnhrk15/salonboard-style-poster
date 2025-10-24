@@ -62,7 +62,8 @@ services:
   worker:
     build: .
     container_name: salonboard_worker
-    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=2
+    command: celery -A app.tasks.celery_app worker --loglevel=info --pool=solo
+    shm_size: '2gb'
     volumes:
       - ./app:/app/app
       - uploads:/app/uploads

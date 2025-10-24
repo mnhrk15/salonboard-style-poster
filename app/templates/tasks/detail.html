@@ -71,6 +71,16 @@
             </table>
         </div>
 
+        <!-- Task Logs -->
+        <div class="card" style="margin-bottom: var(--spacing-lg);">
+            <div class="card-header">
+                <h3>実行ログ</h3>
+            </div>
+            <div id="task-logs" style="padding: var(--spacing-md); background: #f5f5f5; max-height: 400px; overflow-y: auto; font-family: monospace; font-size: 0.875rem; white-space: pre-wrap;">
+                <div class="text-center" style="padding: var(--spacing-xl); color: var(--text-secondary);">ログを読み込み中...</div>
+            </div>
+        </div>
+
         <!-- SALON BOARD Setting Info -->
         <div class="card">
             <div class="card-header">
@@ -85,8 +95,6 @@
 
 <script src="/static/js/websocket.js"></script>
 <script>
-requireAuth();
-
 // Get task ID from URL
 const urlParts = window.location.pathname.split('/');
 const taskId = urlParts[urlParts.length - 1];
@@ -121,12 +129,49 @@ async function loadTaskDetail() {
         // Load SALON BOARD setting
         await loadSetting(currentTask.sb_setting_id);
 
+        // Load task logs
+        await loadTaskLogs();
+
         // Initialize WebSocket for real-time updates if task is PROCESSING
         if (currentTask.status === 'PROCESSING') {
             wsManager.subscribe(taskId, handleTaskUpdate);
         }
     } catch (error) {
         showFlash('タスクの読み込みに失敗しました: ' + error.message, 'error');
+    }
+}
+
+// Load task logs
+async function loadTaskLogs() {
+    const logsContainer = document.getElementById('task-logs');
+
+    if (!currentTask.log_file_path) {
+        logsContainer.innerHTML = '<div class="text-center" style="padding: var(--spacing-xl); color: var(--text-secondary);">ログファイルはまだ生成されていません</div>';
+        return;
+    }
+
+    try {
+        const token = localStorage.getItem('access_token');
+        const response = await fetch(`/api/v1/tasks/${taskId}/logs`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error('ログの読み込みに失敗しました');
+        }
+
+        const logText = await response.text();
+
+        if (logText.trim()) {
+            logsContainer.textContent = logText;
+        } else {
+            logsContainer.innerHTML = '<div class="text-center" style="padding: var(--spacing-xl); color: var(--text-secondary);">ログは空です</div>';
+        }
+    } catch (error) {
+        logsContainer.innerHTML = '<div class="text-center" style="padding: var(--spacing-xl); color: var(--error-color);">ログの読み込みに失敗しました</div>';
+        console.error('Failed to load logs:', error);
     }
 }
 
@@ -197,17 +242,21 @@ async function loadSetting(settingId) {
 function renderSetting(setting) {
     const container = document.getElementById('sb-setting-info');
     container.innerHTML = `
-        <div style="display: grid; grid-template-columns: 150px 1fr; gap: var(--spacing-sm); margin-bottom: var(--spacing-sm);">
+        <div style="display: grid; grid-template-columns: 200px 1fr; gap: var(--spacing-sm); margin-bottom: var(--spacing-sm);">
             <div style="color: var(--text-secondary);">設定名:</div>
-            <div style="font-weight: 600;">${setting.name}</div>
+            <div style="font-weight: 600;">${setting.setting_name || '-'}</div>
         </div>
-        <div style="display: grid; grid-template-columns: 150px 1fr; gap: var(--spacing-sm); margin-bottom: var(--spacing-sm);">
-            <div style="color: var(--text-secondary);">ベースURL:</div>
-            <div>${setting.base_url}</div>
+        <div style="display: grid; grid-template-columns: 200px 1fr; gap: var(--spacing-sm); margin-bottom: var(--spacing-sm);">
+            <div style="color: var(--text-secondary);">SALON BOARD ログインID:</div>
+            <div>${setting.sb_user_id || '-'}</div>
         </div>
-        <div style="display: grid; grid-template-columns: 150px 1fr; gap: var(--spacing-sm);">
-            <div style="color: var(--text-secondary);">ログインID:</div>
-            <div>${setting.login_id}</div>
+        <div style="display: grid; grid-template-columns: 200px 1fr; gap: var(--spacing-sm); margin-bottom: var(--spacing-sm);">
+            <div style="color: var(--text-secondary);">サロンID:</div>
+            <div>${setting.salon_id || '-'}</div>
+        </div>
+        <div style="display: grid; grid-template-columns: 200px 1fr; gap: var(--spacing-sm);">
+            <div style="color: var(--text-secondary);">サロン名:</div>
+            <div>${setting.salon_name || '-'}</div>
         </div>
     `;
 }
@@ -340,8 +389,11 @@ function downloadScreenshot() {
     API.tasks.downloadScreenshot(taskId);
 }
 
-// Load task detail on page load
-loadTaskDetail();
+// Initialize page when DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+    requireAuth();
+    loadTaskDetail();
+});
 
 // Clean up on page unload
 window.addEventListener('beforeunload', () => {

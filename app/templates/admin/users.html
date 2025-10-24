@@ -82,7 +82,8 @@ let currentUsers = [];
 
 async function loadUsers() {
     try {
-        currentUsers = await API.users.list();
+        const response = await API.users.list();
+        currentUsers = response.data.users;
         renderUsersTable();
     } catch (error) {
         showFlash('ユーザーの読み込みに失敗しました: ' + error.message, 'error');

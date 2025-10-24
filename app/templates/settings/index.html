@@ -12,8 +12,9 @@
             <thead>
                 <tr>
                     <th>設定名</th>
-                    <th>ログインID</th>
-                    <th>ベースURL</th>
+                    <th>SALON BOARD ログインID</th>
+                    <th>サロンID</th>
+                    <th>サロン名</th>
                     <th>作成日時</th>
                     <th>操作</th>
                 </tr>
@@ -35,25 +36,33 @@
             <input type="hidden" id="setting_id" name="setting_id">
 
             <div class="form-group">
-                <label for="name" class="form-label required">設定名</label>
-                <input type="text" id="name" name="name" class="form-input" required placeholder="本店アカウント">
+                <label for="setting_name" class="form-label required">設定名</label>
+                <input type="text" id="setting_name" name="setting_name" class="form-input" required placeholder="例: 本店アカウント">
+                <small class="form-text">この設定を識別するための名前（複数店舗がある場合など）</small>
             </div>
 
             <div class="form-group">
-                <label for="base_url" class="form-label required">ベースURL</label>
-                <input type="url" id="base_url" name="base_url" class="form-input" required placeholder="https://salonboard.com/salon/xxxxx/">
-                <small class="form-text">SALON BOARDのサロンページURLを入力してください</small>
+                <label for="sb_user_id" class="form-label required">SALON BOARD ログインID</label>
+                <input type="text" id="sb_user_id" name="sb_user_id" class="form-input" required placeholder="SALON BOARDのログインIDを入力">
+                <small class="form-text">SALON BOARDにログインする際のIDです</small>
             </div>
 
             <div class="form-group">
-                <label for="login_id" class="form-label required">ログインID</label>
-                <input type="text" id="login_id" name="login_id" class="form-input" required placeholder="user@example.com">
-            </div>
-
-            <div class="form-group">
-                <label for="login_password" class="form-label required">パスワード</label>
-                <input type="password" id="login_password" name="login_password" class="form-input" required placeholder="パスワードを入力">
+                <label for="sb_password" class="form-label required">SALON BOARD パスワード</label>
+                <input type="password" id="sb_password" name="sb_password" class="form-input" required placeholder="SALON BOARDのパスワードを入力">
                 <small class="form-text">パスワードは暗号化されて保存されます</small>
+            </div>
+
+            <div class="form-group">
+                <label for="salon_id" class="form-label">サロンID（任意）</label>
+                <input type="text" id="salon_id" name="salon_id" class="form-input" placeholder="複数店舗の場合のみ入力">
+                <small class="form-text">複数店舗を管理している場合、対象サロンのIDを入力</small>
+            </div>
+
+            <div class="form-group">
+                <label for="salon_name" class="form-label">サロン名（任意）</label>
+                <input type="text" id="salon_name" name="salon_name" class="form-input" placeholder="複数店舗の場合のみ入力">
+                <small class="form-text">複数店舗を管理している場合、対象サロンの名前を入力</small>
             </div>
 
             <div class="form-actions" style="display: flex; gap: var(--spacing-md); justify-content: flex-end;">
@@ -82,15 +91,16 @@ function renderSettingsTable() {
     if (!tbody) return;
 
     if (currentSettings.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="text-center" style="padding: var(--spacing-xl); color: var(--text-secondary);">設定がありません。「新規設定」から作成してください。</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center" style="padding: var(--spacing-xl); color: var(--text-secondary);">設定がありません。「新規設定」から作成してください。</td></tr>';
         return;
     }
 
     tbody.innerHTML = currentSettings.map(setting => `
         <tr>
-            <td>${setting.setting_name}</td>
-            <td>${setting.sb_user_id}</td>
-            <td>${setting.salon_id}</td>
+            <td>${setting.setting_name || '-'}</td>
+            <td>${setting.sb_user_id || '-'}</td>
+            <td>${setting.salon_id || '-'}</td>
+            <td>${setting.salon_name || '-'}</td>
             <td>${formatDate(setting.created_at)}</td>
             <td>
                 <button onclick="editSetting('${setting.id}')" class="btn btn-secondary btn-sm">編集</button>
@@ -104,21 +114,25 @@ function showCreateForm() {
     document.getElementById('modal-title').textContent = '新規設定';
     document.getElementById('setting-form').reset();
     document.getElementById('setting_id').value = '';
+    document.getElementById('sb_password').placeholder = 'SALON BOARDのパスワードを入力';
+    document.getElementById('sb_password').required = true;
     document.getElementById('setting-modal').style.display = 'flex';
 }
 
 async function editSetting(settingId) {
     try {
         const response = await API.settings.get(settingId);
-        const setting = response.data;
+        const setting = response.data || response;
+
         document.getElementById('modal-title').textContent = '設定編集';
         document.getElementById('setting_id').value = setting.id;
-        document.getElementById('name').value = setting.setting_name;
-        document.getElementById('base_url').value = setting.salon_id;
-        document.getElementById('login_id').value = setting.sb_user_id;
-        document.getElementById('login_password').value = '';
-        document.getElementById('login_password').placeholder = '変更する場合のみ入力';
-        document.getElementById('login_password').required = false;
+        document.getElementById('setting_name').value = setting.setting_name || '';
+        document.getElementById('sb_user_id').value = setting.sb_user_id || '';
+        document.getElementById('sb_password').value = '';
+        document.getElementById('sb_password').placeholder = '変更する場合のみ入力';
+        document.getElementById('sb_password').required = false;
+        document.getElementById('salon_id').value = setting.salon_id || '';
+        document.getElementById('salon_name').value = setting.salon_name || '';
         document.getElementById('setting-modal').style.display = 'flex';
     } catch (error) {
         showFlash('設定の読み込みに失敗しました: ' + error.message, 'error');
@@ -150,11 +164,11 @@ async function handleSubmit(event) {
     const settingId = form.setting_id.value;
 
     const data = {
-        setting_name: form.name.value,
-        sb_user_id: form.login_id.value,
-        sb_password: form.login_password.value,
-        salon_id: form.base_url.value,
-        salon_name: form.name.value
+        setting_name: form.setting_name.value,
+        sb_user_id: form.sb_user_id.value,
+        sb_password: form.sb_password.value,
+        salon_id: form.salon_id.value || null,
+        salon_name: form.salon_name.value || null
     };
 
     setButtonLoading(button, true);
@@ -162,8 +176,8 @@ async function handleSubmit(event) {
     try {
         if (settingId) {
             // Update
-            if (!data.login_password) {
-                delete data.login_password;
+            if (!data.sb_password) {
+                delete data.sb_password;
             }
             await API.settings.update(settingId, data);
             showFlash('設定を更新しました', 'success');

@@ -98,3 +98,5 @@ docker/nginx/ssl/
 *.key
 *.crt
 *.csr
+
+sample/
