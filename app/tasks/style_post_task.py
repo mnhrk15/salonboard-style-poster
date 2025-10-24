@@ -80,6 +80,14 @@ def execute_style_post(
     logger.addHandler(file_handler)
 
     try:
+        # Get initial task state
+        task = task_service.get_task_by_id(db, task_uuid, user_id)
+        if not task:
+            raise ValueError("Task not found in database")
+
+        start_from = task.completed_items
+        logger.info(f"Task starting from item: {start_from}")
+
         # Update task status to PROCESSING
         task_service.update_task_status(
             db, task_uuid, "PROCESSING", log_file_path=str(log_file_path)
@@ -108,11 +116,19 @@ def execute_style_post(
         # Load selectors
         selectors = load_selectors()
 
-        # Progress callback
-        def progress_callback(completed: int, total: int) -> None:
-            """Update task progress in database."""
+        # Progress callback that also checks for interruption
+        def check_and_report_progress_callback(completed: int, total: int) -> bool:
+            """Update task progress and check for interruption signal."""
+            # Update progress in DB
             task_service.update_task_status(db, task_uuid, "PROCESSING", completed_items=completed)
             logger.info(f"Progress: {completed}/{total}")
+
+            # Check for interruption
+            task = task_service.get_task_by_id(db, task_uuid, user_id)
+            if task and task.status == "INTERRUPTED":
+                logger.warning("Interruption signal received, stopping task.")
+                return False
+            return True
 
         # Create and run poster
         poster = SalonBoardStylePoster(
@@ -120,7 +136,7 @@ def execute_style_post(
             screenshot_dir=str(screenshot_dir),
             headless=settings.PLAYWRIGHT_HEADLESS,
             slow_mo=settings.PLAYWRIGHT_SLOW_MO,
-            progress_callback=progress_callback,
+            progress_callback=check_and_report_progress_callback,
         )
 
         results = poster.run(
@@ -129,10 +145,24 @@ def execute_style_post(
             data_filepath=data_file_path,
             image_dir=images_dir_path,
             salon_info=salon_info,
+            start_from_row=start_from,
         )
 
-        # Update task status based on results
-        if results["success"] and results["failed"] == 0:
+        # Check final status after run
+        final_task_status = task_service.get_task_by_id(db, task_uuid, user_id)
+        if final_task_status and final_task_status.status == "INTERRUPTED":
+            logger.info("Task finished due to interruption.")
+            # Status is already INTERRUPTED, no need to update again unless to add a message
+            task_service.update_task_status(
+                db,
+                task_uuid,
+                "INTERRUPTED",
+                completed_items=results["completed"],
+                error_message="Task was manually interrupted."
+            )
+
+        # Update task status based on results if not interrupted
+        elif results["success"] and results["failed"] == 0:
             task_service.update_task_status(
                 db,
                 task_uuid,

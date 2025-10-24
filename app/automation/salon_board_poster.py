@@ -37,13 +37,14 @@ class SalonBoardStylePoster:
             screenshot_dir: Directory to save error screenshots.
             headless: Whether to run browser in headless mode.
             slow_mo: Delay between operations in milliseconds.
-            progress_callback: Optional callback function(completed, total) for progress updates.
+            progress_callback: Optional callback function(completed, total) for progress
+                updates. Should return False to interrupt the task.
         """
         self.selectors = selectors
         self.screenshot_dir = Path(screenshot_dir)
         self.headless = headless
         self.slow_mo = slow_mo
-        self.progress_callback = progress_callback
+        self.check_and_report_progress_callback = progress_callback
 
         self.playwright: Playwright | None = None
         self.browser: Browser | None = None
@@ -382,6 +383,7 @@ class SalonBoardStylePoster:
         data_filepath: str,
         image_dir: str,
         salon_info: dict[str, str] | None = None,
+        start_from_row: int = 0,
     ) -> dict[str, Any]:
         """Execute the entire automation workflow.
 
@@ -421,8 +423,14 @@ class SalonBoardStylePoster:
             # Navigate to style list page (once)
             self.step_navigate_to_style_list_page()
 
-            # Process each style
-            for idx, row in df.iterrows():
+            # Process each style, starting from the specified row
+            for idx, row in df.iloc[start_from_row:].iterrows():
+                # Check for interruption before processing the next item
+                if self.check_and_report_progress_callback:
+                    if not self.check_and_report_progress_callback(results["completed"], results["total"]):
+                        logger.info("Task interrupted by external signal.")
+                        break
+
                 try:
                     style_data = row.to_dict()
 
@@ -440,10 +448,6 @@ class SalonBoardStylePoster:
 
                     results["completed"] += 1
 
-                    # Report progress
-                    if self.progress_callback:
-                        self.progress_callback(results["completed"], results["total"])
-
                 except Exception as e:
                     logger.error(f"Failed to process style at row {idx}: {e}")
                     screenshot_path = self._take_screenshot(f"error_row_{idx}")
@@ -458,6 +462,10 @@ class SalonBoardStylePoster:
 
                     # Continue with next style (don't break)
                     continue
+
+            # Final progress update after loop finishes
+            if self.check_and_report_progress_callback:
+                self.check_and_report_progress_callback(results["completed"], results["total"])
 
         except Exception as e:
             logger.error(f"Critical error during automation: {e}")

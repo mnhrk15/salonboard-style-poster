@@ -198,9 +198,7 @@ def interrupt_task(
         )
 
     # Update task status to INTERRUPTED
-    updated_task = task_service.update_task_status(db, task_id, "INTERRUPTED")
-
-    # TODO: Signal Celery task to stop (implement in Celery task)
+    task_service.update_task_status(db, task_id, "INTERRUPTED")
 
     return {
         "success": True,
@@ -244,17 +242,27 @@ def resume_task(
             detail=f"Cannot resume task with status: {task.status}",
         )
 
-    # Update task status to PENDING (will be picked up by Celery)
-    updated_task = task_service.update_task_status(db, task_id, "PENDING")
+    # Re-queue Celery task with original parameters
+    execute_style_post.apply_async(
+        args=[
+            str(task.id),
+            task.user_id,
+            task.sb_setting_id,
+            task.data_file_path,
+            task.images_dir_path,
+        ],
+        task_id=str(task.id),
+    )
 
-    # TODO: Re-queue Celery task (implement in Celery task)
+    # Update status to PENDING to reflect re-queuing
+    task_service.update_task_status(db, task_id, "PENDING")
 
     return {
         "success": True,
         "data": {
             "task_id": str(task_id),
-            "status": "PROCESSING",
-            "message": "Task has been resumed",
+            "status": "PENDING",
+            "message": "Task has been re-queued for resumption",
         },
     }
 
