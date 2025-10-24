@@ -131,24 +131,24 @@ docker-compose exec web python scripts/create_admin.py admin@example.com SecureP
 
 ### スタイル情報ファイルの形式
 
-CSV/Excelファイルには以下のカラムを含めてください:
+CSV/Excelファイルには以下のカラムを**すべて**含めてください:
 
-| カラム名 | 説明 | 必須 |
-|---------|------|------|
-| image_filename | 画像ファイル名 | ○ |
-| stylist_name | スタイリスト名 | ○ |
-| style_name | スタイル名 | ○ |
-| stylist_comment | スタイリストコメント | |
-| category | カテゴリ（ladies/mens） | ○ |
-| length | 髪の長さ | ○ |
-| menu_detail | メニュー詳細 | |
-| coupon_name | クーポン名 | |
-| hashtags | ハッシュタグ（カンマ区切り） | |
+| カラム名 | 説明 |
+|---|---|
+| スタイリスト名 | スタイリスト名 |
+| クーポン名 | 関連付けるクーポン名 |
+| コメント | スタイリストのコメント |
+| スタイル名 | スタイル名 |
+| カテゴリ | カテゴリ（`レディース` または `メンズ`） |
+| 長さ | 髪の長さ |
+| メニュー内容 | 施術メニューの詳細 |
+| ハッシュタグ | ハッシュタグ（カンマ区切り） |
+| 画像名 | 画像ファイル名 |
 
 **例:**
 ```csv
-image_filename,stylist_name,style_name,stylist_comment,category,length,menu_detail,coupon_name,hashtags
-style001.jpg,山田太郎,大人かわいいボブ,柔らかい印象に,ladies,ミディアム,カット+カラー,新規限定クーポン,ボブ,ナチュラル,大人可愛い
+スタイリスト名,クーポン名,コメント,スタイル名,カテゴリ,長さ,メニュー内容,ハッシュタグ,画像名
+山田 太郎,"【人気No.1☆リピート率90％超え】Cut+ケア+魔法のバブル付 ¥7700⇒",ナチュラルな外ハネスタイルです。スタイリングも簡単！,大人かわいい外ハネボブ,レディース,ミディアム,カット,"外ハネボブ,20代",style1.jpg
 ```
 
 ## 🔧 開発

@@ -358,11 +358,16 @@ async def create_style_post_task(
         total_items = len(df)
 
         # Validate file consistency (FR-03-03: ファイル間整合性検証)
-        if "image_filename" not in df.columns:
-            raise ValueError("Data file must contain 'image_filename' column")
+        required_columns = [
+            "スタイリスト名", "クーポン名", "コメント", "スタイル名",
+            "カテゴリ", "長さ", "メニュー内容", "ハッシュタグ", "画像名"
+        ]
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        if missing_columns:
+            raise ValueError(f"Data file is missing required columns: {', '.join(missing_columns)}")
 
         # Get all image filenames from data file
-        required_images = set(df["image_filename"].dropna().astype(str).tolist())
+        required_images = set(df["画像名"].dropna().astype(str).tolist())
         uploaded_images = set(image_filenames)
 
         # Check for missing images

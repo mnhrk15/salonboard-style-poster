@@ -283,7 +283,7 @@ class SalonBoardStylePoster:
         if not self.page:
             raise RuntimeError("Page not initialized")
 
-        logger.info(f"Processing style: {style_data.get('style_name', 'Unknown')}")
+        logger.info(f"Processing style: {style_data.get('スタイル名', 'Unknown')}")
 
         # Click new style button
         new_style_button = self.selectors["style_form"]["new_style_button"]
@@ -305,21 +305,21 @@ class SalonBoardStylePoster:
         logger.info("Image uploaded")
 
         # Fill form fields
-        if style_data.get("stylist_name"):
+        if style_data.get("スタイリスト名"):
             stylist_select = self.selectors["style_form"]["stylist_name_select"]
-            self.page.locator(stylist_select).select_option(label=style_data["stylist_name"])
+            self.page.locator(stylist_select).select_option(label=style_data["スタイリスト名"])
 
-        if style_data.get("stylist_comment"):
+        if style_data.get("コメント"):
             comment_textarea = self.selectors["style_form"]["stylist_comment_textarea"]
-            self.page.locator(comment_textarea).fill(style_data["stylist_comment"])
+            self.page.locator(comment_textarea).fill(style_data["コメント"])
 
-        if style_data.get("style_name"):
+        if style_data.get("スタイル名"):
             style_name_input = self.selectors["style_form"]["style_name_input"]
-            self.page.locator(style_name_input).fill(style_data["style_name"])
+            self.page.locator(style_name_input).fill(style_data["スタイル名"])
 
         # Category and length selection
-        category = style_data.get("category", "ladies").lower()
-        if category == "ladies":
+        category = style_data.get("カテゴリ", "レディース").lower()
+        if category == "レディース":
             category_radio = self.selectors["style_form"]["category_ladies_radio"]
             length_select = self.selectors["style_form"]["length_select_ladies"]
         else:
@@ -328,15 +328,15 @@ class SalonBoardStylePoster:
 
         self.page.locator(category_radio).click()
 
-        if style_data.get("length"):
-            self.page.locator(length_select).select_option(label=style_data["length"])
+        if style_data.get("長さ"):
+            self.page.locator(length_select).select_option(label=style_data["長さ"])
 
-        if style_data.get("menu_detail"):
+        if style_data.get("メニュー内容"):
             menu_detail = self.selectors["style_form"]["menu_detail_textarea"]
-            self.page.locator(menu_detail).fill(style_data["menu_detail"])
+            self.page.locator(menu_detail).fill(style_data["メニュー内容"])
 
         # Select coupon if specified
-        if style_data.get("coupon_name"):
+        if style_data.get("クーポン名"):
             coupon_button = self.selectors["style_form"]["coupon"]["select_button"]
             coupon_modal = self.selectors["style_form"]["coupon"]["modal_container"]
             coupon_label_template = self.selectors["style_form"]["coupon"]["item_label_template"]
@@ -345,17 +345,17 @@ class SalonBoardStylePoster:
             self.page.locator(coupon_button).click()
             self.page.wait_for_selector(coupon_modal)
 
-            coupon_label = coupon_label_template.format(name=style_data["coupon_name"])
+            coupon_label = coupon_label_template.format(name=style_data["クーポン名"])
             self.page.locator(coupon_label).first.click()
             self.page.locator(coupon_setting).click()
             self.page.wait_for_selector(coupon_modal, state="hidden")
 
         # Add hashtags
-        if style_data.get("hashtags"):
+        if style_data.get("ハッシュタグ"):
             hashtag_input = self.selectors["style_form"]["hashtag"]["input_area"]
             hashtag_button = self.selectors["style_form"]["hashtag"]["add_button"]
 
-            hashtags = [tag.strip() for tag in style_data["hashtags"].split(",")]
+            hashtags = [tag.strip() for tag in style_data["ハッシュタグ"].split(",")]
             for tag in hashtags:
                 if tag:
                     self.page.locator(hashtag_input).fill(tag)
@@ -374,7 +374,7 @@ class SalonBoardStylePoster:
         back_button = self.selectors["style_form"]["back_to_list_button"]
         self._click_and_wait(back_button)
 
-        logger.info(f"Style posted successfully: {style_data.get('style_name')}")
+        logger.info(f"Style posted successfully: {style_data.get('スタイル名')}")
 
     def run(
         self,
@@ -435,9 +435,9 @@ class SalonBoardStylePoster:
                     style_data = row.to_dict()
 
                     # Get image path
-                    image_filename = style_data.get("image_filename")
+                    image_filename = style_data.get("画像名")
                     if not image_filename:
-                        raise ValueError("image_filename not specified in data")
+                        raise ValueError("'画像名' column not specified in data")
 
                     image_path = Path(image_dir) / image_filename
                     if not image_path.exists():
@@ -455,7 +455,7 @@ class SalonBoardStylePoster:
                     results["failed"] += 1
                     results["errors"].append({
                         "row": int(idx),
-                        "style_name": style_data.get("style_name", "Unknown"),
+                        "style_name": style_data.get("スタイル名", "Unknown"),
                         "error": str(e),
                         "screenshot": screenshot_path,
                     })
