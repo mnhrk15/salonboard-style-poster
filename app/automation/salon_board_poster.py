@@ -460,6 +460,21 @@ class SalonBoardStylePoster:
                         "screenshot": screenshot_path,
                     })
 
+                    # Try to recover by navigating back to the style list page
+                    try:
+                        logger.info("Attempting to recover by navigating back to style list page.")
+                        self.step_navigate_to_style_list_page()
+                    except Exception as nav_e:
+                        logger.critical(f"Failed to recover by navigating back to list page: {nav_e}")
+                        self._take_screenshot("critical_nav_error")
+                        # Add critical error to results and break loop
+                        results["success"] = False
+                        results["errors"].append({
+                            "error": "Critical navigation error, cannot continue.",
+                            "screenshot": self._take_screenshot("critical_nav_error"),
+                        })
+                        break
+
                     # Continue with next style (don't break)
                     continue
 
